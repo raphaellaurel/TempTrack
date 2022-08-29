@@ -44,7 +44,7 @@ void loop() {
     float hif = dht.computeHeatIndex(f, h);
     float hic = dht.computeHeatIndex(t, h, false);
 
-    Serial.print(F(" Humidity: "));
+    /*Serial.print(F(" Humidity: "));
     Serial.print(h);
     Serial.print(F("%  Temperature: "));
     Serial.print(t);
@@ -54,7 +54,7 @@ void loop() {
     Serial.print(hic);
     Serial.print(F("C "));
     Serial.print(hif);
-    Serial.println(F("F"));
+    Serial.println(F("F"));*/
 
     Serial1.print(F(" Humidity: "));
     Serial1.print(h);
