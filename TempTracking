@@ -1,19 +1,59 @@
+from threading import Thread
+import paho.mqtt.publish as publish
 import serial
 import time
 import string
-import paho.mqtt.publish as publish
 
-ser = serial.Serial("/dev/rfcomm0", 9600)
-ser.write(str.encode('Start\r\n')) #This line will write to arduino
+EC2 = "3.25.99.2"
+BT = '/dev/rfcomm0'
 
-while True:
-	if ser.in_waiting > 0:
-		rawserial = ser.readline()
-		cookedserial = rawserial.decode('utf-8').strip('\r\n')
-		temp_val = cookedserial[32:34]
-		hum_val = cookedserial[11:13]
-		print(temp_val)
-		print(hum_val)
+def parseData(sensordata):
+	TData = sensordata.strip().split(':')
+	if len(TData) != 2:
+		return '', ''
+	return TData[0], TData[1]
 
-		publish.single("Teensy/Temperature", temp_val, hostname="3.25.99.2")
-		publish.single("Teensy/Humidity", hum_val, hostname="3.25.99.2")
+def publishData(line):
+	TReading = line.strip().split(',')
+	for TData in TReading:
+		TData, value = parseData(TData)
+		if TData != '':
+			publish.single(TData, value, hostname=EC2)
+			print(TData + ' : ' + value)
+
+def thdPublish(name, stop):
+	ser = serial.Serial(BT, 9600)
+	ser.write(str.encode('Start\r\n'))
+
+	while not stop():
+		if ser.in_waiting > 0:
+			raw = ser.readline()
+			line = raw.decode('utf-8').strip('\r\n')
+			print(line)
+			publishData(line)
+
+	ser.close()
+	print('Thread function done!!')
+
+
+def main():
+	stop_thread = False
+	thdf = Thread(target=thdPublish, args=('thrPublish', lambda: stop_thread))
+	thdf.start()
+
+	try:
+		while True:
+			cmd = input()
+			if(cmd =='q'):
+				print('stopping.....')
+				stop_thread = True
+				break;
+			print('Main Thread')
+
+	except KeyboardInterrupt:
+		stop_thread = True
+	finally:
+		thdf.join()
+
+if __name__ == "__main__":
+	main()

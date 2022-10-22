@@ -1,0 +1,122 @@
+import serial
+import time, sys
+import json
+import paho.mqtt.publish as publish
+import paho.mqtt.client as mqtt
+from threading import Thread
+from abc import ABCMeta, abstractmethod
+import serial
+
+EC2 = "3.25.99.2"
+BT = '/dev/rfcomm0'
+
+THigh = 24
+LHigh = 500
+MHigh = 500
+
+
+class ITopic:
+    def getTopic(self):
+        return self.mName
+
+    @abstractmethod
+    def proc(self, msg):
+        pass
+
+class TemperatureData(ITopic):
+    def __init__(self, ser):
+        self.mName = 'Temperature'
+        self.mSer = ser
+
+    def proc(self, msg):
+        value = (float)(msg.payload.decode("utf-8"))
+        print(self.mName, value)
+        if int(value) > THigh:
+            self.mSer.write(str.encode('GREEN_ON\n'))
+            print('Sent GREEN_ON')
+        else:
+            self.mSer.write(str.encode('GREEN_OFF\n'))
+            print('Sent GREEN_OFF')
+
+class LightData(ITopic):
+    def __init__(self, ser):
+        self.mName = 'Light'
+        self.mSer = ser
+
+    def proc(self, msg):
+        value = (float)(msg.payload.decode("utf-8"))
+        print(self.mName, value)
+        if int(value) > LHigh:
+            self.mSer.write(str.encode('RED_ON\n'))
+            print('Sent RED_ON')
+        else:
+            self.mSer.write(str.encode('RED_OFF\n'))
+            print('Sent RED_OFF')
+
+class MoistureData(ITopic):
+    def __init__(self, ser):
+        self.mName = 'Moisture'
+        self.mSer = ser
+
+    def proc(self, msg):
+        value = (int)(msg.payload.decode("utf-8"))
+        print(self.mName, value)
+        if int(value) > MHigh:
+            self.mSer.write(str.encode('YELLOW_ON\n'))
+            print('Sent YELLOW_ON')
+        else:
+            self.mSer.write(str.encode('YELLOW_OFF\n'))
+            print('Sent YELLOW_OFF')
+
+class MQTTClient:
+    def __init__(self, addr, topic):
+        self.mClient = mqtt.Client(userdata=self)
+        self.mClient.on_connect = self.on_connect
+        self.mClient.on_message = self.on_message
+        self.mClient.connect(addr, 1883, 60)
+        self.mTopic = topic
+        time.sleep(1)
+
+    @staticmethod
+    def on_connect(client, userdata, flags, rc):
+        print("Connected to MQTT")
+        print("Connection returned result: " + str(rc) )
+
+        userdata.mClient.subscribe(userdata.mTopic.mName)
+
+    @staticmethod
+    def on_message(client, userdata, msg):
+        #print(msg.topic+" "+str(msg.payload))
+        userdata.mTopic.proc(msg)
+
+    def start(self):
+        self.mClient.loop_start()
+
+    def stop(self):
+        self.mClient.loop_stop(True)
+
+def main():
+
+    ser = serial.Serial(BT, 9600)
+
+    client1 = MQTTClient(EC2, TemperatureData(ser))
+    client1.start()
+
+    client2 = MQTTClient(EC2, LightData(ser))
+    client2.start()
+
+    client3 = MQTTClient(EC2, MoistureData(ser))
+    client3.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        client1.stop()
+        client2.stop()
+        client3.stop()
+        ser.close()
+        pass
+
+if __name__ == "__main__":
+    main()
